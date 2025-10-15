@@ -1,4 +1,4 @@
-package davget
+package main
 
 import (
 	"bytes"
@@ -12,24 +12,24 @@ import (
 )
 
 // WebDAV PROPFIND response structures
-type Multistatus struct {
+type multiStatus struct {
 	XMLName   xml.Name   `xml:"multistatus"`
-	Responses []Response `xml:"response"`
+	Responses []response `xml:"response"`
 }
 
-type Response struct {
+type response struct {
 	Href     string     `xml:"href"`
-	Propstat []Propstat `xml:"propstat"`
+	Propstat []propstat `xml:"propstat"`
 }
 
-type Propstat struct {
-	Prop   Prop   `xml:"prop"`
+type propstat struct {
+	Prop   prop   `xml:"prop"`
 	Status string `xml:"status"`
 }
 
-type Prop struct {
+type prop struct {
 	DisplayName  string       `xml:"displayname"`
-	ResourceType ResourceType `xml:"resourcetype"`
+	ResourceType resourceType `xml:"resourcetype"`
 }
 
 // PROPFIND request body for displayname and resourcetype
@@ -41,12 +41,12 @@ var propfindBody = `<?xml version="1.0" encoding="utf-8" ?>
   </D:prop>
 </D:propfind>`
 
-type ResourceType struct {
+type resourceType struct {
 	Collection *struct{} `xml:"collection"`
 }
 
 // call PROPFIND against URL and convert to typical HTTP GET response
-func List(urlStr string) (string, error) {
+func davList(urlStr string) (string, error) {
 	req, err := http.NewRequest("PROPFIND", urlStr, bytes.NewBufferString(propfindBody))
 	if err != nil {
 		return "", err
@@ -70,7 +70,7 @@ func List(urlStr string) (string, error) {
 		return "", err
 	}
 
-	var ms Multistatus
+	var ms multiStatus
 	if err := xml.Unmarshal(data, &ms); err != nil {
 		return "", err
 	}
@@ -105,13 +105,12 @@ func List(urlStr string) (string, error) {
 }
 
 // Recursively download files and directories from a WebDAV server
-func GetRecursive(urlStr string) {
+func davGetRecursive(urlStr string) error {
 	fmt.Println("GetRecursive called with URL:", urlStr)
 
 	req, err := http.NewRequest("PROPFIND", urlStr, bytes.NewBufferString(propfindBody))
 	if err != nil {
-		fmt.Printf("Error creating PROPFIND request: %v\n", err)
-		return
+		return fmt.Errorf("error creating PROPFIND request: %v", err)
 	}
 	req.Header.Set("Depth", "1")
 	req.Header.Set("Content-Type", "application/xml")
@@ -119,32 +118,27 @@ func GetRecursive(urlStr string) {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		fmt.Printf("Error performing PROPFIND: %v\n", err)
-		return
+		return fmt.Errorf("error performing PROPFIND: %v", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 207 {
-		fmt.Printf("Unexpected status code: %d\n", resp.StatusCode)
-		return
+		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Printf("Error reading response: %v\n", err)
-		return
+		return fmt.Errorf("error reading response: %v", err)
 	}
 
-	var ms Multistatus
+	var ms multiStatus
 	if err := xml.Unmarshal(data, &ms); err != nil {
-		fmt.Printf("Error unmarshalling XML: %v\n", err)
-		return
+		return fmt.Errorf("error unmarshalling XML: %v", err)
 	}
 
 	reqURL, err := url.Parse(urlStr)
 	if err != nil {
-		fmt.Printf("Error parsing URL: %v\n", err)
-		return
+		return fmt.Errorf("error parsing URL: %v", err)
 	}
 	reqPath := reqURL.Path
 
@@ -167,7 +161,7 @@ func GetRecursive(urlStr string) {
 			fmt.Printf("Create and enter directory: %s\n", name)
 			os.Mkdir(name, 0755) // create local directory
 			os.Chdir(name)       // change into it
-			GetRecursive(r.Href)
+			davGetRecursive(r.Href)
 			os.Chdir("..") // go back up
 		} else {
 			fmt.Printf("Downloading file: %s\n", name)
@@ -188,4 +182,5 @@ func GetRecursive(urlStr string) {
 			outFile.Close()
 		}
 	}
+	return nil
 }
