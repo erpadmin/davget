@@ -1,0 +1,5 @@
+.vscode/
+
+# short term ignores
+davget_test.go
+cmd/
