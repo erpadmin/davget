@@ -24,7 +24,7 @@ jobs:
       - name: Build binaries
         run: |
           mkdir -p dist
-          GOOS=linux   GOARCH=amd64 go build -o dist/app-linux-amd64
+          GOOS=linux   GOARCH=amd64 go build -o dist/davget-linux-amd64
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
